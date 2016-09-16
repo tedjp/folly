@@ -550,8 +550,10 @@ AC_ARG_ENABLE([follytestmain],
    [follytestmain=${enableval}], [follytestmain=no])
 
 use_follytestmain=yes
+# dwarf.h moved from /usr/include to /usr/include/libdwarf
+CPPFLAGS="$CPPFLAGS -I/usr/include/libdwarf"
 if test "x${follytestmain}" = "xyes"; then
-   AC_CHECK_HEADERS([libdwarf.h dwarf.h],, AC_MSG_ERROR([Please install libdwarf development package]))
+   AC_CHECK_HEADERS([dwarf.h],, AC_MSG_ERROR([Please install libdwarf development package]))
    AC_CHECK_HEADERS([libelf.h elf.h],, AC_MSG_ERROR([Please install libelf development package]))
    AC_CHECK_HEADERS([libunwind.h],, AC_MSG_ERROR([Please install libinwind development package]))
 else
