@@ -193,7 +193,15 @@ pos_type IOStreamBuf::seekpos(pos_type pos, std::ios_base::openmode which) {
     return seekoff(off_type(pos), std::ios_base::beg, which);
 }
 
-// TODO: showmanyc();
+streamsize IOStreamBuf::showmanyc() {
+    streamsize s = egptr() - gptr();
+
+    for (const IOBuf *buf = gcur_->next(); buf != head_->get(); buf = buf->next())
+        s += buf->length();
+
+    return s;
+}
+
 // TODO: xsgetn();
 
 } // namespace
