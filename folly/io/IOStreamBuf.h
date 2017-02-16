@@ -32,7 +32,7 @@ class IOStreamBuf : public std::basic_streambuf<uint8_t> {
           std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override;
 
   // get area
-  showmanyc();
+  std::streamsize showmanyc();
   virtual std::basic_streambuf::int_type underflow() override;
   //uflow(); // optional; base calls overflow() & increments gptr.
   //virtual std::streamsize xsgetn(char_type* s, std::streamsize count) override; // optional but worth implementing.
