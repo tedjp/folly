@@ -23,31 +23,22 @@ class IOStreamBuf : public std::basic_streambuf<uint8_t> {
 
  protected:
   // positioning
-
-  // probably should do this
   virtual pos_type seekoff(off_type off, std::ios_base::seekdir dir,
           std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override;
-  // probably should allow this too
   virtual pos_type seekpos(pos_type pos,
           std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override;
 
   // get area
-  std::streamsize showmanyc();
+  virtual std::streamsize showmanyc() override;
   virtual std::basic_streambuf::int_type underflow() override;
-  //uflow(); // optional; base calls overflow() & increments gptr.
-  //virtual std::streamsize xsgetn(char_type* s, std::streamsize count) override; // optional but worth implementing.
-
+  virtual std::streamsize xsgetn(char_type* s, std::streamsize count) override;
   virtual int_type pbackfail(int_type c = Traits::eof()) override;
 
 #if 0
   // put area
   xsputn();
   overflow();
-  pbase();
-  pptr();
-  epptr();
   pbump();
-  setp();
 #endif
 
   pos_type current_position() const;
@@ -55,6 +46,7 @@ class IOStreamBuf : public std::basic_streambuf<uint8_t> {
  private:
   std::shared_ptr<folly::IOBuf> head_;
   folly::IOBuf *gcur_; // current get IOBuf
+  // future:
   //folly::IOBuf *pcur_; // current put IOBuf
 };
 

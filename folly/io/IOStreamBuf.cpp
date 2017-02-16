@@ -202,6 +202,24 @@ streamsize IOStreamBuf::showmanyc() {
     return s;
 }
 
-// TODO: xsgetn();
+std::streamsize IOStreamBuf::xsgetn(uint8_t* s, std::streamsize count) {
+    std::streamsize copied = 0;
+
+    std::streamsize n = std::min(egptr() - gptr(), count);
+    memcpy(s + copied, gptr(), n);
+    count -= n;
+    copied += n;
+
+    for (const IOBuf *buf = gcur_->next(); buf != head_->get() && count > 0; buf = buf->next()) {
+        n = std::min(buf->length(), count);
+        memcpy(s + copied, buf->data(), n);
+        count -= n;
+        copied += n;
+    }
+
+    gbump(copied);
+
+    return copied;
+}
 
 } // namespace
