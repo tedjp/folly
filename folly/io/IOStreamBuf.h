@@ -52,4 +52,4 @@ class IOStreamBuf : public std::basic_streambuf<uint8_t> {
 
 }
 
-// vim: ts=2 sw=2 et ai
+// vim: ts=2 sw=2 et ai tw=80

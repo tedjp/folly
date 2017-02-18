@@ -223,3 +223,5 @@ std::streamsize IOStreamBuf::xsgetn(uint8_t* s, std::streamsize count) {
 }
 
 } // namespace
+
+// vim: ts=2 sw=2 tw=80 et ai
