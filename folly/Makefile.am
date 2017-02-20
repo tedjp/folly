@@ -204,6 +204,7 @@ nobase_follyinclude_HEADERS = \
 	io/Cursor.h \
 	io/Cursor-inl.h \
 	io/IOBuf.h \
+	io/IOStreamBuf.h \
 	io/IOBufQueue.h \
 	io/RecordIO.h \
 	io/RecordIO-inl.h \
@@ -447,6 +448,7 @@ libfolly_la_SOURCES = \
 	io/Compression.cpp \
 	io/Cursor.cpp \
 	io/IOBuf.cpp \
+	io/IOStreamBuf.cpp \
 	io/IOBufQueue.cpp \
 	io/RecordIO.cpp \
 	io/ShutdownSocketSet.cpp \

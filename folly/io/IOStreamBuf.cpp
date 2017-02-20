@@ -1,17 +1,19 @@
-#include "../Likely.h"
-#include "IOStreamBuf.h"
+#include <folly/Likely.h>
+#include <folly/io/IOStreamBuf.h>
 
 namespace folly {
 
-IOStreamBuf::IOStreamBuf(const std::shared_ptr<folly::IOBuf>& buf)
-  : basic_streambuf<uint8_t>(),
-    head_(buf),
-    gcur_(buf.get()) {
-  setg(gcur->data(); gcur->data(); gcur->tail());
+template <typename T>
+IOStreamBuf<T>::IOStreamBuf(const folly::IOBuf* head)
+  : std::basic_streambuf<T>(),
+    head_(head),
+    gcur_(head) {
+  this->setg(gcur_->data(), gcur_->data(), gcur_->tail());
 }
 
-void IOStreamBuf::swap(IOStreamBuf& rhs) {
-  basic_streambuf<uint8_t>::swap(rhs);
+template <typename T>
+void IOStreamBuf<T>::swap(IOStreamBuf<T>& rhs) {
+  std::basic_streambuf<T>::swap(rhs);
   std::swap(head_, rhs.head_);
   std::swap(gcur_, rhs.gcur_);
 }
@@ -19,13 +21,14 @@ void IOStreamBuf::swap(IOStreamBuf& rhs) {
 // This is called either to rewind the get area (because eback() == egptr())
 // or to attempt to put back a non-matching character (which we disallow
 // on non-mutable IOBufs).
-int_type IOStreamBuf::pbackfail(int_type c = Traits::eof()) override {
-  if (egptr() != eback())
-    return Traits::eof();
+template <typename T>
+typename IOStreamBuf<T>::int_type IOStreamBuf<T>::pbackfail(int_type c) {
+  if (this->egptr() != this->eback())
+    return traits_type::eof();
 
-  if (gcur_ == head.get()) {
+  if (gcur_ == head_) {
     // Already at beginning of first IOBuf
-    return Traits::eof();
+    return traits_type::eof();
   }
 
   // Find the next preceding non-empty IOBuf, back to head_
@@ -34,49 +37,56 @@ int_type IOStreamBuf::pbackfail(int_type c = Traits::eof()) override {
   IOBuf *prev = gcur_;
   do {
     prev = prev->prev();
-  } while (prev->length() == 0 && prev != head_->get());
+  } while (prev->length() == 0 && prev != head_);
 
-  if (UNLIKELY(prev->length() == 0))
-    return Traits::eof();
+  // XXX: Needs modification when sizeof(T) > 1
+  if (UNLIKELY(prev->length() < sizeof(T)))
+    return traits_type::eof();
 
   // Check whether c matches potential *gptr() before updating pointers
-  if (c != Traits::to_int_type(prev->tail()[-1]))
-    return Traits::eof();
+  if (c != traits_type::to_int_type(prev->tail()[-1]))
+    return traits_type::eof();
 
   gcur_ = prev;
 
-  setg(gcur_->data(), gcur_->tail() - 1, gcur_->tail());
+  this->setg(gcur_->data(), gcur_->tail() - 1, gcur_->tail());
 
-  return Traits::to_int_type(*gptr());
+  return traits_type::to_int_type(*this->gptr());
 }
 
-int_type IOStreamBuf::underflow() {
+template <typename T>
+typename IOStreamBuf<T>::int_type IOStreamBuf<T>::underflow() {
   // public methods only call underflow() when gptr() >= egptr()
   // (but it's not an error to call underflow when gptr() < egptr())
-  if (UNLIKELY(gptr() < egptr()))
-    return Traits::to_int_type(*gptr());
+  if (UNLIKELY(this->gptr() < this->egptr()))
+    return traits_type::to_int_type(*this->gptr());
 
   // Also handles non-chained
   IOBuf *next = gcur_->next();
   if (next == head_)
-    return Traits::eof();
+    return traits_type::eof();
 
   gcur_ = next;
-  setg(gcur_->data(), gcur_->data(), gcur_->tail());
+  this->setg(gcur_->data(), gcur_->data(), gcur_->tail());
 
-  return Traits::to_int_type(*gptr());
+  return traits_type::to_int_type(*this->gptr());
 }
 
-pos_type IOStreamBuf::current_position() const {
+template <typename T>
+typename IOStreamBuf<T>::pos_type IOStreamBuf<T>::current_position() const {
   pos_type pos = 0;
 
-  for (const IOBuf *buf = head_->get(); buf != gcur_; buf = buf->next())
+  for (const IOBuf *buf = head_; buf != gcur_; buf = buf->next())
     pos += buf->length();
 
-  return pos + (gptr() - eback());
+  return pos + (this->gptr() - this->eback());
 }
 
-pos_type IOStreamBuf::seekoff(off_type off, std::ios_base::seekdir way, std::ios_base::openmode which) {
+template <typename T>
+typename IOStreamBuf<T>::pos_type
+IOStreamBuf<T>::seekoff(off_type off,
+                        std::ios_base::seekdir way,
+                        std::ios_base::openmode which) {
   static constexpr pos_type badoff = static_cast<pos_type>(static_cast<off_type>(-1));
 
   if ((which & std::ios_base::in) != std::ios_base::in)
@@ -86,19 +96,20 @@ pos_type IOStreamBuf::seekoff(off_type off, std::ios_base::seekdir way, std::ios
     if (UNLIKELY(off < 0))
       return badoff;
 
-    IOBuf *buf = head_->get();
+    IOBuf *buf = head_;
 
     auto remaining_offset = off;
 
-    while (remaining_offset > buf->length()) {
-      remaining_offset -= buf->length();
+    // TODO: Handle multi-byte T with sub-CharT buffer boundary
+    while (remaining_offset > buf->length() / sizeof(T)) {
+      remaining_offset -= buf->length() / sizeof(T);
       buf = buf->next();
-      if (buf == head_->get())
+      if (buf == head_)
         return badoff;
       }
 
     gcur_ = buf;
-    setg(gcur_->data(), gcur->data() + remaining_offset, gcur->tail());
+    this->setg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
 
     return pos_type(off);
   }
@@ -107,20 +118,20 @@ pos_type IOStreamBuf::seekoff(off_type off, std::ios_base::seekdir way, std::ios
     if (UNLIKELY(off > 0))
       return badoff;
 
-    IOBuf *buf = head->prev();
+    IOBuf *buf = head_->prev();
 
     // Work with positive offset working back from the last tail()
     auto remaining_offset = 0 - off;
 
-    while (remaining_offset > buf->length()) {
-      remaining_offset -= buf->length();
+    while (remaining_offset > buf->length() / sizeof(T)) {
+      remaining_offset -= buf->length() / sizeof(T);
       buf = buf->prev();
-      if (buf == head_->get() && off > buf->length())
+      if (buf == head_ && off > buf->length() / sizeof(T))
         return badoff;
     }
 
     gcur_ = buf;
-    setg(gcur->data(), gcur->tail() - remaining_offset, gcur->tail());
+    this->setg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());
 
     return current_position();
   }
@@ -137,48 +148,48 @@ pos_type IOStreamBuf::seekoff(off_type off, std::ios_base::seekdir way, std::ios
       // backwards; use as positive distance backward
       remaining_offset = 0 - remaining_offset;
 
-      if (remaining_offset < gptr() - eback()) {
+      if (remaining_offset < this->gptr() - this->eback()) {
         // In the same IOBuf
-        setg(gcur_->data(), gcur_->data() + gptr() - eback() - remaining_offset, gcur_->tail());
+        this->setg(gcur_->data(), gcur_->data() + this->gptr() - this->eback() - remaining_offset * sizeof(T), gcur_->tail());
         return current_position();
       }
 
-      remaining_offset -= gptr() - eback();
+      remaining_offset -= this->gptr() - this->eback();
 
       do {
         buf = buf->prev();
 
-        if (buf == head_->get() && remaining_offset > buf->length())
+        if (buf == head_ && remaining_offset > buf->length() / sizeof(T))
           return badoff; // position precedes start of data
 
-        remaining_offset -= buf->length();
-      } while (remaining_offset > buf->length());
+        remaining_offset -= buf->length() / sizeof(T);
+      } while (remaining_offset > buf->length() / sizeof(T));
 
       gcur_ = buf;
-      setg(gcur_->data(), gcur_->tail() - remaining_offset, gcur_->tail());
+      this->setg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());
       return current_position();
     }
 
     assert(remaining_offset > 0);
 
-    if (remaining_offset < egptr() - gptr()) {
-      assert(egptr() == gcur_->tail());
-      setg(gcur_->data(), gptr() + remaining_offset, gcur_->tail());
+    if (remaining_offset < this->egptr() - this->gptr()) {
+      assert(this->egptr() == gcur_->tail());
+      this->setg(gcur_->data(), this->gptr() + remaining_offset, gcur_->tail());
       return current_position();
     }
 
-    remaining_offset -= egptr() - gptr();
+    remaining_offset -= this->egptr() - this->gptr();
 
     for (buf = buf->next();
-         buf != head_->get();
+         buf != head_;
          buf = buf->next()) {
-      if (remaining_offset < buf->length()) {
+      if (remaining_offset < buf->length() / sizeof(T)) {
         gcur_ = buf;
-        setg(gcur_->data(), gcur_->data() + remaining_offset, gcur_->tail());
+        this->setg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
         return current_position();
       }
 
-      remaining_offset -= buf->length();
+      remaining_offset -= buf->length() / sizeof(T);
     }
 
     return badoff;
@@ -187,35 +198,44 @@ pos_type IOStreamBuf::seekoff(off_type off, std::ios_base::seekdir way, std::ios
   return badoff;
 }
 
-pos_type IOStreamBuf::seekpos(pos_type pos, std::ios_base::openmode which) {
+template <typename T>
+typename IOStreamBuf<T>::pos_type
+IOStreamBuf<T>::seekpos(pos_type pos, std::ios_base::openmode which) {
   return seekoff(off_type(pos), std::ios_base::beg, which);
 }
 
-streamsize IOStreamBuf::showmanyc() {
-  streamsize s = egptr() - gptr();
+template <typename T>
+std::streamsize IOStreamBuf<T>::showmanyc() {
+  std::streamsize s = this->egptr() - this->gptr();
 
-  for (const IOBuf *buf = gcur_->next(); buf != head_->get(); buf = buf->next())
-    s += buf->length();
+  for (const IOBuf *buf = gcur_->next(); buf != head_; buf = buf->next())
+    s += buf->length() / sizeof(T);
 
   return s;
 }
 
-std::streamsize IOStreamBuf::xsgetn(uint8_t* s, std::streamsize count) {
+template <typename T>
+std::streamsize IOStreamBuf<T>::xsgetn(char_type* s, std::streamsize count) {
+  if (UNLIKELY(count < 0))
+    return 0;
+
   std::streamsize copied = 0;
 
-  std::streamsize n = std::min(egptr() - gptr(), count);
-  memcpy(s + copied, gptr(), n);
+  std::streamsize n = std::min(this->egptr() - this->gptr(), static_cast<off_type>(count));
+  // XXX: Check for overflow (write a memcpy_safe or something)
+  memcpy(s, this->gptr(), n * sizeof(T));
   count -= n;
   copied += n;
 
-  for (const IOBuf *buf = gcur_->next(); buf != head_->get() && count > 0; buf = buf->next()) {
-    n = std::min(buf->length(), count);
-    memcpy(s + copied, buf->data(), n);
+  for (const IOBuf *buf = gcur_->next(); buf != head_ && count > 0; buf = buf->next()) {
+    n = std::min(buf->length() / sizeof(T), static_cast<off_type>(count));
+    // XXX: Check for overflow (as above)
+    memcpy(s + copied * sizeof(T), buf->data(), n * sizeof(T));
     count -= n;
     copied += n;
   }
 
-  gbump(copied);
+  this->gbump(copied);
 
   return copied;
 }

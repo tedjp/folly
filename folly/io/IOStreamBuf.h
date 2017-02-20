@@ -1,25 +1,37 @@
 #include <memory>
 #include <streambuf>
 
-#include "IOBuf.h"
+#include <folly/io/IOBuf.h>
 
 namespace folly {
 
-class IOStreamBuf : public std::basic_streambuf<uint8_t> {
+template<typename T>
+class IOStreamBuf : public std::basic_streambuf<T> {
+  // Due to having to merge single-byte subsets of CharT across IOBuf boundaries,
+  // prevent the use of IOStreamBuf on multi-byte types for now.
+  static_assert(sizeof(T) == 1, "IOStreamBuf doesn't yet work with multi-byte types");
+
  public:
-  // Constructors & states to consider:
-  // We own the IOBuf.
-  // We don't own the IOBuf.
-  // Mutable or readonly.
-  // COW.
-  // strstreambuf seems to have good indications on handling these.
-  IOStreamBuf(const std::shared_ptr<folly::IOBuf>& iobuf);
+  /**
+   * Construct IOStreamBuf using the provided IOBuf, which may be the head of a
+   * chain.
+   * The IOStreamBuf does not own the IOBuf nor extend the lifetime of it; you
+   * must ensure that the IOBuf provided lasts at least as long as the
+   * IOStreamBuf.
+   */
+  IOStreamBuf(const folly::IOBuf* head);
 
   IOStreamBuf(const IOStreamBuf&) = default;
   IOStreamBuf& operator=(const IOStreamBuf&) = default;
-  void swap(const IOStreamBuf&);
+  void swap(IOStreamBuf<T>&);
 
   virtual ~IOStreamBuf() override = default;
+
+  using char_type = typename std::basic_streambuf<T>::char_type;
+  using int_type = typename std::basic_streambuf<T>::int_type;
+  using off_type = typename std::basic_streambuf<T>::off_type;
+  using pos_type = typename std::basic_streambuf<T>::pos_type;
+  using traits_type = typename std::basic_streambuf<T>::traits_type;
 
  protected:
   // positioning
@@ -30,15 +42,15 @@ class IOStreamBuf : public std::basic_streambuf<uint8_t> {
 
   // get area
   virtual std::streamsize showmanyc() override;
-  virtual std::basic_streambuf::int_type underflow() override;
+  virtual int_type underflow() override;
   virtual std::streamsize xsgetn(char_type* s, std::streamsize count) override;
-  virtual int_type pbackfail(int_type c = Traits::eof()) override;
+  virtual int_type pbackfail(int_type c = traits_type::eof()) override;
 
   pos_type current_position() const;
 
  private:
-  std::shared_ptr<folly::IOBuf> head_;
-  folly::IOBuf *gcur_; // current get IOBuf
+  const folly::IOBuf* head_;
+  const folly::IOBuf* gcur_; // current get IOBuf
 };
 
 }
