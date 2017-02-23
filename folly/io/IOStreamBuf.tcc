@@ -81,7 +81,7 @@ typename IOStreamBuf<T>::pos_type IOStreamBuf<T>::current_position() const {
   pos_type pos = 0;
 
   for (const IOBuf* buf = head_; buf != gcur_; buf = buf->next())
-    pos += buf->length();
+    pos += buf->length() / sizeof(T);
 
   return pos + (this->gptr() - this->eback());
 }
@@ -128,7 +128,7 @@ IOStreamBuf<T>::seekoff(off_type off,
     while (remaining_offset > buf->length() / sizeof(T)) {
       remaining_offset -= buf->length() / sizeof(T);
       buf = buf->prev();
-      if (buf == head_ && off > buf->length() / sizeof(T))
+      if (buf == head_ && remaining_offset > buf->length() / sizeof(T))
         return badoff;
     }
 
@@ -139,7 +139,7 @@ IOStreamBuf<T>::seekoff(off_type off,
   }
 
   if (way == std::ios_base::cur) {
-    if (UNLIKELY(off == 0))
+    if (off == 0) // commonly called by tellg()
       return current_position();
 
     const IOBuf* buf = gcur_;
@@ -157,15 +157,15 @@ IOStreamBuf<T>::seekoff(off_type off,
       }
 
       remaining_offset -= this->gptr() - this->eback();
+      buf = buf->prev();
 
-      do {
-        buf = buf->prev();
-
-        if (buf == head_ && remaining_offset > buf->length() / sizeof(T))
+      while (remaining_offset > buf->length() / sizeof(T)) {
+        if (buf == head_)
           return badoff; // position precedes start of data
 
         remaining_offset -= buf->length() / sizeof(T);
-      } while (remaining_offset > buf->length() / sizeof(T));
+        buf = buf->prev();
+      }
 
       gcur_ = buf;
       csetg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());

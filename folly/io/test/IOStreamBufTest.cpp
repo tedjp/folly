@@ -29,14 +29,54 @@ TEST(IOStreamBuf, IStream) {
   std::istream in(&streambuf);
 
   std::string s;
-  in >> s;
+  std::getline(in, s);
   EXPECT_EQ(s, "hello world");
+  EXPECT_TRUE(in.eof());
 
   in.seekg(1);
-  s.clear();
 
-  in >> s;
-  EXPECT_EQ(s, "ello world");
+  char c;
+  in.get(c);
+  EXPECT_EQ(c, 'e');
+  in.get(c);
+  EXPECT_EQ(c, 'l');
+  EXPECT_EQ(in.tellg(), 3);
+
+  std::getline(in, s);
+  EXPECT_EQ(s, "lo world");
+
+  in.seekg(-2, std::ios_base::end);
+  EXPECT_FALSE(in.eof());
+
+  std::getline(in, s);
+  EXPECT_EQ(s, "ld");
+
+  // Seek from start
+  in.seekg( 7, std::ios_base::beg);
+  char chars[] = "\xfb\xfb";
+  in.get(chars, sizeof(chars));
+  EXPECT_EQ(chars[0], 'o');
+  EXPECT_EQ(chars[1], 'r');
+  EXPECT_FALSE(in.eof());
+  EXPECT_FALSE(in.fail());
+
+  // Seek from end
+  in.seekg(-2, std::ios_base::end);
+  EXPECT_EQ(in.tellg(), 9);
+  in.seekg(-9, std::ios_base::end);
+  EXPECT_EQ(in.tellg(), 2);
+
+  // Seek from cur
+  in.seekg( 0, std::ios_base::end);
+  in.seekg(-9, std::ios_base::cur);
+  in.seekg( 2, std::ios_base::cur);
+  EXPECT_EQ(in.tellg(), 4);
+
+  std::getline(in, s);
+  EXPECT_EQ(s, "o world");
+
+  EXPECT_TRUE(in.eof());
+  EXPECT_FALSE(in.bad());
 }
 
 // TODO: Tests directly on the streambuf
