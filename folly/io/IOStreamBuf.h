@@ -33,6 +33,8 @@ class IOStreamBuf : public std::basic_streambuf<T> {
   using pos_type = typename std::basic_streambuf<T>::pos_type;
   using traits_type = typename std::basic_streambuf<T>::traits_type;
 
+  static const IOStreamBuf<T>::pos_type badoff;
+
  protected:
   // positioning
   virtual pos_type seekoff(off_type off, std::ios_base::seekdir dir,
@@ -48,11 +50,17 @@ class IOStreamBuf : public std::basic_streambuf<T> {
 
   pos_type current_position() const;
 
+  // setg() convenience wrapper that accepts `const uint8_t*` (pointers to
+  // IOBuf bytes) and casts them to the streambuf's template type.
+  void csetg(const uint8_t* gbeg, const uint8_t* gcurr, const uint8_t* gend);
+
  private:
   const folly::IOBuf* head_;
   const folly::IOBuf* gcur_; // current get IOBuf
 };
 
 }
+
+#include "IOStreamBuf.tcc"
 
 // vim: ts=2 sw=2 et ai tw=80

@@ -1,5 +1,4 @@
 #include <folly/Likely.h>
-#include <folly/io/IOStreamBuf.h>
 
 namespace folly {
 
@@ -8,7 +7,7 @@ IOStreamBuf<T>::IOStreamBuf(const folly::IOBuf* head)
   : std::basic_streambuf<T>(),
     head_(head),
     gcur_(head) {
-  this->setg(gcur_->data(), gcur_->data(), gcur_->tail());
+  csetg(gcur_->data(), gcur_->data(), gcur_->tail());
 }
 
 template <typename T>
@@ -17,6 +16,11 @@ void IOStreamBuf<T>::swap(IOStreamBuf<T>& rhs) {
   std::swap(head_, rhs.head_);
   std::swap(gcur_, rhs.gcur_);
 }
+
+template <typename T>
+const typename IOStreamBuf<T>::pos_type IOStreamBuf<T>::badoff =
+  static_cast<typename IOStreamBuf<T>::pos_type>(
+    static_cast<typename IOStreamBuf<T>::off_type>(-1));
 
 // This is called either to rewind the get area (because eback() == egptr())
 // or to attempt to put back a non-matching character (which we disallow
@@ -34,7 +38,7 @@ typename IOStreamBuf<T>::int_type IOStreamBuf<T>::pbackfail(int_type c) {
   // Find the next preceding non-empty IOBuf, back to head_
   // Ensure the object state is not modified unless an earlier input sequence
   // can be found.
-  IOBuf *prev = gcur_;
+  const IOBuf* prev = gcur_;
   do {
     prev = prev->prev();
   } while (prev->length() == 0 && prev != head_);
@@ -49,7 +53,7 @@ typename IOStreamBuf<T>::int_type IOStreamBuf<T>::pbackfail(int_type c) {
 
   gcur_ = prev;
 
-  this->setg(gcur_->data(), gcur_->tail() - 1, gcur_->tail());
+  csetg(gcur_->data(), gcur_->tail() - 1, gcur_->tail());
 
   return traits_type::to_int_type(*this->gptr());
 }
@@ -62,12 +66,12 @@ typename IOStreamBuf<T>::int_type IOStreamBuf<T>::underflow() {
     return traits_type::to_int_type(*this->gptr());
 
   // Also handles non-chained
-  IOBuf *next = gcur_->next();
+  const IOBuf* next = gcur_->next();
   if (next == head_)
     return traits_type::eof();
 
   gcur_ = next;
-  this->setg(gcur_->data(), gcur_->data(), gcur_->tail());
+  csetg(gcur_->data(), gcur_->data(), gcur_->tail());
 
   return traits_type::to_int_type(*this->gptr());
 }
@@ -76,7 +80,7 @@ template <typename T>
 typename IOStreamBuf<T>::pos_type IOStreamBuf<T>::current_position() const {
   pos_type pos = 0;
 
-  for (const IOBuf *buf = head_; buf != gcur_; buf = buf->next())
+  for (const IOBuf* buf = head_; buf != gcur_; buf = buf->next())
     pos += buf->length();
 
   return pos + (this->gptr() - this->eback());
@@ -87,8 +91,6 @@ typename IOStreamBuf<T>::pos_type
 IOStreamBuf<T>::seekoff(off_type off,
                         std::ios_base::seekdir way,
                         std::ios_base::openmode which) {
-  static constexpr pos_type badoff = static_cast<pos_type>(static_cast<off_type>(-1));
-
   if ((which & std::ios_base::in) != std::ios_base::in)
     return badoff;
 
@@ -96,7 +98,7 @@ IOStreamBuf<T>::seekoff(off_type off,
     if (UNLIKELY(off < 0))
       return badoff;
 
-    IOBuf *buf = head_;
+    const IOBuf* buf = head_;
 
     auto remaining_offset = off;
 
@@ -109,7 +111,7 @@ IOStreamBuf<T>::seekoff(off_type off,
       }
 
     gcur_ = buf;
-    this->setg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
+    csetg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
 
     return pos_type(off);
   }
@@ -118,7 +120,7 @@ IOStreamBuf<T>::seekoff(off_type off,
     if (UNLIKELY(off > 0))
       return badoff;
 
-    IOBuf *buf = head_->prev();
+    const IOBuf* buf = head_->prev();
 
     // Work with positive offset working back from the last tail()
     auto remaining_offset = 0 - off;
@@ -131,7 +133,7 @@ IOStreamBuf<T>::seekoff(off_type off,
     }
 
     gcur_ = buf;
-    this->setg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());
+    csetg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());
 
     return current_position();
   }
@@ -140,7 +142,7 @@ IOStreamBuf<T>::seekoff(off_type off,
     if (UNLIKELY(off == 0))
       return current_position();
 
-    IOBuf *buf = gcur_;
+    const IOBuf* buf = gcur_;
 
     auto remaining_offset = off;
 
@@ -150,7 +152,7 @@ IOStreamBuf<T>::seekoff(off_type off,
 
       if (remaining_offset < this->gptr() - this->eback()) {
         // In the same IOBuf
-        this->setg(gcur_->data(), gcur_->data() + this->gptr() - this->eback() - remaining_offset * sizeof(T), gcur_->tail());
+        csetg(gcur_->data(), gcur_->data() + reinterpret_cast<size_t>(this->gptr() - this->eback() - remaining_offset * sizeof(T)), gcur_->tail());
         return current_position();
       }
 
@@ -166,15 +168,15 @@ IOStreamBuf<T>::seekoff(off_type off,
       } while (remaining_offset > buf->length() / sizeof(T));
 
       gcur_ = buf;
-      this->setg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());
+      csetg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(T), gcur_->tail());
       return current_position();
     }
 
     assert(remaining_offset > 0);
 
     if (remaining_offset < this->egptr() - this->gptr()) {
-      assert(this->egptr() == gcur_->tail());
-      this->setg(gcur_->data(), this->gptr() + remaining_offset, gcur_->tail());
+      assert(reinterpret_cast<const uint8_t*>(this->egptr()) == gcur_->tail());
+      csetg(gcur_->data(), reinterpret_cast<const uint8_t*>(this->gptr() + remaining_offset), gcur_->tail());
       return current_position();
     }
 
@@ -185,7 +187,7 @@ IOStreamBuf<T>::seekoff(off_type off,
          buf = buf->next()) {
       if (remaining_offset < buf->length() / sizeof(T)) {
         gcur_ = buf;
-        this->setg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
+        csetg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
         return current_position();
       }
 
@@ -208,7 +210,7 @@ template <typename T>
 std::streamsize IOStreamBuf<T>::showmanyc() {
   std::streamsize s = this->egptr() - this->gptr();
 
-  for (const IOBuf *buf = gcur_->next(); buf != head_; buf = buf->next())
+  for (const IOBuf* buf = gcur_->next(); buf != head_; buf = buf->next())
     s += buf->length() / sizeof(T);
 
   return s;
@@ -227,8 +229,8 @@ std::streamsize IOStreamBuf<T>::xsgetn(char_type* s, std::streamsize count) {
   count -= n;
   copied += n;
 
-  for (const IOBuf *buf = gcur_->next(); buf != head_ && count > 0; buf = buf->next()) {
-    n = std::min(buf->length() / sizeof(T), static_cast<off_type>(count));
+  for (const IOBuf* buf = gcur_->next(); buf != head_ && count > 0; buf = buf->next()) {
+    n = std::min(static_cast<std::streamsize>(buf->length() / sizeof(T)), static_cast<off_type>(count));
     // XXX: Check for overflow (as above)
     memcpy(s + copied * sizeof(T), buf->data(), n * sizeof(T));
     count -= n;
@@ -238,6 +240,13 @@ std::streamsize IOStreamBuf<T>::xsgetn(char_type* s, std::streamsize count) {
   this->gbump(copied);
 
   return copied;
+}
+
+template <typename T>
+void IOStreamBuf<T>::csetg(const uint8_t* gbeg, const uint8_t* gcurr, const uint8_t* gend) {
+  return this->setg(reinterpret_cast<T*>(const_cast<uint8_t*>(gbeg)),
+                    reinterpret_cast<T*>(const_cast<uint8_t*>(gcurr)),
+                    reinterpret_cast<T*>(const_cast<uint8_t*>(gend)));
 }
 
 } // namespace
