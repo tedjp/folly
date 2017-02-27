@@ -1,3 +1,4 @@
+#include <cstring>
 #include <istream>
 #include <memory>
 #include <string>
@@ -40,7 +41,7 @@ TEST(IOStreamBuf, IStream) {
   EXPECT_EQ(c, 'e');
   in.get(c);
   EXPECT_EQ(c, 'l');
-  EXPECT_EQ(in.tellg(), 3);
+  ASSERT_EQ(in.tellg(), 3);
 
   std::getline(in, s);
   EXPECT_EQ(s, "lo world");
@@ -70,13 +71,43 @@ TEST(IOStreamBuf, IStream) {
   in.seekg( 0, std::ios_base::end);
   in.seekg(-9, std::ios_base::cur);
   in.seekg( 2, std::ios_base::cur);
-  EXPECT_EQ(in.tellg(), 4);
+  ASSERT_EQ(in.tellg(), 4);
 
   std::getline(in, s);
   EXPECT_EQ(s, "o world");
 
   EXPECT_TRUE(in.eof());
+  ASSERT_FALSE(in.bad());
+
+  // Test xsgetn (via basic_istream::read)
+  in.seekg(0);
+  ASSERT_EQ(in.tellg(), 0);
+
+  char cdata[sizeof("zzhello worldzz")];
+  in.read(cdata, sizeof(cdata));
+  EXPECT_TRUE(in.eof());
+  EXPECT_TRUE(in.fail()); // short read = fail
   EXPECT_FALSE(in.bad());
+  in.clear(); // clear failbit
+  std::string check(cdata, cdata + in.gcount());
+  EXPECT_EQ(check, "hello world");
+
+  in.seekg(1);
+  ASSERT_EQ(in.tellg(), 1);
+  std::memset(cdata, '\xfb', sizeof(cdata));
+  in.read(cdata, 6);
+
+  EXPECT_EQ(in.gcount(), 6);
+  check = std::string(cdata, cdata + 6);
+  EXPECT_EQ(check, "ello w");
+
+  // putback
+  in.putback('w');
+  ASSERT_TRUE(in.good());
+  in.putback(' '); // continue into the previous IOBuf
+  ASSERT_TRUE(in.good());
+  in.putback('z'); // non-matching putback
+  EXPECT_FALSE(in.good());
 }
 
 // TODO: Tests directly on the streambuf

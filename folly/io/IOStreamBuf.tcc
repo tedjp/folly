@@ -22,13 +22,13 @@ const typename IOStreamBuf<T>::pos_type IOStreamBuf<T>::badoff =
   static_cast<typename IOStreamBuf<T>::pos_type>(
     static_cast<typename IOStreamBuf<T>::off_type>(-1));
 
-// This is called either to rewind the get area (because eback() == egptr())
+// This is called either to rewind the get area (because gptr() == eback())
 // or to attempt to put back a non-matching character (which we disallow
 // on non-mutable IOBufs).
 template <typename T>
 typename IOStreamBuf<T>::int_type IOStreamBuf<T>::pbackfail(int_type c) {
-  if (this->egptr() != this->eback())
-    return traits_type::eof();
+  if (this->gptr() != this->eback())
+    return traits_type::eof(); // trying to putback non-matching character
 
   if (gcur_ == head_) {
     // Already at beginning of first IOBuf
@@ -100,15 +100,14 @@ IOStreamBuf<T>::seekoff(off_type off,
 
     const IOBuf* buf = head_;
 
-    auto remaining_offset = off;
+    size_t remaining_offset = static_cast<size_t>(off);
 
-    // TODO: Handle multi-byte T with sub-CharT buffer boundary
     while (remaining_offset > buf->length() / sizeof(T)) {
       remaining_offset -= buf->length() / sizeof(T);
       buf = buf->next();
       if (buf == head_)
         return badoff;
-      }
+    }
 
     gcur_ = buf;
     csetg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(T), gcur_->tail());
@@ -123,7 +122,7 @@ IOStreamBuf<T>::seekoff(off_type off,
     const IOBuf* buf = head_->prev();
 
     // Work with positive offset working back from the last tail()
-    auto remaining_offset = 0 - off;
+    size_t remaining_offset = static_cast<size_t>(0 - off);
 
     while (remaining_offset > buf->length() / sizeof(T)) {
       remaining_offset -= buf->length() / sizeof(T);
@@ -144,13 +143,11 @@ IOStreamBuf<T>::seekoff(off_type off,
 
     const IOBuf* buf = gcur_;
 
-    auto remaining_offset = off;
-
-    if (remaining_offset < 0) {
+    if (off < 0) {
       // backwards; use as positive distance backward
-      remaining_offset = 0 - remaining_offset;
+      size_t remaining_offset = static_cast<size_t>(0 - off);
 
-      if (remaining_offset < this->gptr() - this->eback()) {
+      if (remaining_offset < static_cast<size_t>(this->gptr() - this->eback())) {
         // In the same IOBuf
         csetg(gcur_->data(), gcur_->data() + reinterpret_cast<size_t>(this->gptr() - this->eback() - remaining_offset * sizeof(T)), gcur_->tail());
         return current_position();
@@ -172,9 +169,10 @@ IOStreamBuf<T>::seekoff(off_type off,
       return current_position();
     }
 
-    assert(remaining_offset > 0);
+    assert(off > 0);
+    size_t remaining_offset = static_cast<size_t>(off);
 
-    if (remaining_offset < this->egptr() - this->gptr()) {
+    if (remaining_offset < static_cast<size_t>(this->egptr() - this->gptr())) {
       assert(reinterpret_cast<const uint8_t*>(this->egptr()) == gcur_->tail());
       csetg(gcur_->data(), reinterpret_cast<const uint8_t*>(this->gptr() + remaining_offset), gcur_->tail());
       return current_position();
@@ -235,9 +233,10 @@ std::streamsize IOStreamBuf<T>::xsgetn(char_type* s, std::streamsize count) {
     memcpy(s + copied * sizeof(T), buf->data(), n * sizeof(T));
     count -= n;
     copied += n;
-  }
 
-  this->gbump(copied);
+    gcur_ = buf;
+    csetg(gcur_->data(), gcur_->data() + n * sizeof(T), gcur_->tail());
+  }
 
   return copied;
 }
