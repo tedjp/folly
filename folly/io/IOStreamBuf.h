@@ -27,11 +27,11 @@ class IOStreamBuf : public std::basic_streambuf<CharT, Traits> {
 
   virtual ~IOStreamBuf() override = default;
 
-  using char_type = typename std::basic_streambuf<CharT>::char_type;
-  using int_type = typename std::basic_streambuf<CharT>::int_type;
-  using off_type = typename std::basic_streambuf<CharT>::off_type;
-  using pos_type = typename std::basic_streambuf<CharT>::pos_type;
-  using traits_type = typename std::basic_streambuf<CharT>::traits_type;
+  using char_type = typename std::basic_streambuf<CharT,Traits>::char_type;
+  using int_type = typename std::basic_streambuf<CharT,Traits>::int_type;
+  using off_type = typename std::basic_streambuf<CharT,Traits>::off_type;
+  using pos_type = typename std::basic_streambuf<CharT,Traits>::pos_type;
+  using traits_type = typename std::basic_streambuf<CharT,Traits>::traits_type;
 
   static const IOStreamBuf<CharT,Traits>::pos_type badoff;
 
