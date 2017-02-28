@@ -19,45 +19,66 @@ static std::unique_ptr<IOBuf> sampledata() {
   return std::move(hello);
 }
 
+// Convenience function:
+// Create a basic_string<T> from a basic_string<char>
+template <typename T>
+static std::basic_string<T> typedString(const std::string& in) {
+  // Simply cast the string instead of widening since we only support
+  // 1-octet types for now.
+  static_assert(sizeof(T) == 1,
+      "Casting without widening only works when sizeof(T) == 1");
+
+  std::basic_string<T> out;
+  out.append(reinterpret_cast<const T*>(in.data()), in.size());
+  return out;
+}
+
+template <typename T>
+class IOStreamBufTest : public ::testing::Test {
+};
+
+typedef ::testing::Types<char, unsigned char, uint8_t, signed char> IOStreamBufTestTypes;
+
+TYPED_TEST_CASE(IOStreamBufTest, IOStreamBufTestTypes);
+
 // Tests via an istream.
-TEST(IOStreamBuf, IStream) {
+// XXX: Split these out.
+TYPED_TEST(IOStreamBufTest, IStream) {
+  const TypeParam newline = static_cast<TypeParam>('\n');
   std::unique_ptr<IOBuf> buf = sampledata();
 
-  // XXX: Type kludgery
-  // IOStreamBuf type needs to match istream type, and everything
-  // needs to be cast to/from IOBuf's uint8_t
-  IOStreamBuf<uint8_t> streambuf(buf.get());
-  std::basic_istream<uint8_t> in(&streambuf);
+  IOStreamBuf<TypeParam> streambuf(buf.get());
+  std::basic_istream<TypeParam> in(&streambuf);
 
-  std::basic_string<uint8_t> s;
-  std::getline(in, s);
-  EXPECT_EQ(s, "hello world");
+  std::basic_string<TypeParam> s;
+  std::getline(in, s, newline);
+  EXPECT_EQ(s, typedString<TypeParam>("hello world"));
   EXPECT_TRUE(in.eof());
 
   in.seekg(1);
 
-  uint8_t c;
+  TypeParam c;
   in.get(c);
   EXPECT_EQ(c, 'e');
   in.get(c);
   EXPECT_EQ(c, 'l');
   ASSERT_EQ(in.tellg(), 3);
 
-  std::getline(in, s);
-  EXPECT_EQ(s, "lo world");
+  std::getline(in, s, newline);
+  EXPECT_EQ(s, typedString<TypeParam>("lo world"));
 
   in.seekg(-2, std::ios_base::end);
   EXPECT_FALSE(in.eof());
 
-  std::getline(in, s);
-  EXPECT_EQ(s, "ld");
+  std::getline(in, s, newline);
+  EXPECT_EQ(s, typedString<TypeParam>("ld"));
 
   // Seek from start
   in.seekg( 7, std::ios_base::beg);
-  uint8_t uint8_ts[] = "\xfb\xfb";
-  in.get(uint8_ts, sizeof(uint8_ts));
-  EXPECT_EQ(uint8_ts[0], 'o');
-  EXPECT_EQ(uint8_ts[1], 'r');
+  TypeParam raw[] = "\xfb\xfb";
+  in.get(raw, sizeof(raw), newline);
+  EXPECT_EQ(raw[0], static_cast<TypeParam>('o'));
+  EXPECT_EQ(raw[1], static_cast<TypeParam>('r'));
   EXPECT_FALSE(in.eof());
   EXPECT_FALSE(in.fail());
 
@@ -73,8 +94,8 @@ TEST(IOStreamBuf, IStream) {
   in.seekg( 2, std::ios_base::cur);
   ASSERT_EQ(in.tellg(), 4);
 
-  std::getline(in, s);
-  EXPECT_EQ(s, "o world");
+  std::getline(in, s, newline);
+  EXPECT_EQ(s, typedString<TypeParam>("o world"));
 
   EXPECT_TRUE(in.eof());
   ASSERT_FALSE(in.bad());
@@ -83,14 +104,14 @@ TEST(IOStreamBuf, IStream) {
   in.seekg(0);
   ASSERT_EQ(in.tellg(), 0);
 
-  uint8_t cdata[sizeof("zzhello worldzz")];
+  TypeParam cdata[sizeof("zzhello worldzz")];
   in.read(cdata, sizeof(cdata));
   EXPECT_TRUE(in.eof());
   EXPECT_TRUE(in.fail()); // short read = fail
   EXPECT_FALSE(in.bad());
   in.clear(); // clear failbit
-  std::string check(cdata, cdata + in.gcount());
-  EXPECT_EQ(check, "hello world");
+  std::basic_string<TypeParam> check(cdata, cdata + in.gcount());
+  EXPECT_EQ(check, typedString<TypeParam>("hello world"));
 
   in.seekg(1);
   ASSERT_EQ(in.tellg(), 1);
@@ -98,20 +119,16 @@ TEST(IOStreamBuf, IStream) {
   in.read(cdata, 6);
 
   EXPECT_EQ(in.gcount(), 6);
-  check = std::string(cdata, cdata + 6);
-  EXPECT_EQ(check, "ello w");
+  check = std::basic_string<TypeParam>(cdata, cdata + 6);
+  EXPECT_EQ(check, typedString<TypeParam>("ello w"));
 
   // putback
-  in.putback('w');
+  in.putback(static_cast<TypeParam>('w'));
   ASSERT_TRUE(in.good());
-  in.putback(' '); // continue into the previous IOBuf
+  in.putback(static_cast<TypeParam>(' ')); // continue into the previous IOBuf
   ASSERT_TRUE(in.good());
-  in.putback('z'); // non-matching putback
+  in.putback(static_cast<TypeParam>('z')); // non-matching putback
   EXPECT_FALSE(in.good());
 }
-
-// TODO: Tests directly on the streambuf
-
-// FUTURE: Test multi-byte template argument (wchar_t)
 
 // vim: ts=2 sw=2 et tw=80
