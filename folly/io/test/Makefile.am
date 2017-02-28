@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 
-CPPFLAGS = -I$(top_srcdir)/test/gtest/googletest/include
+CPPFLAGS = -isystem $(top_srcdir)/test/gtest/googletest/include
 ldadd = $(top_builddir)/test/libfollytestmain.la
 
 # compression-test takes several minutes, so it's not run automatically.
