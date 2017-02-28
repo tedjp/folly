@@ -222,13 +222,13 @@ std::streamsize IOStreamBuf<CharT,Traits>::xsgetn(char_type* s, std::streamsize 
   std::streamsize copied = 0;
 
   std::streamsize n = std::min(this->egptr() - this->gptr(), static_cast<off_type>(count));
-  memcpy(s, this->gptr(), n * sizeof(CharT));
+  Traits::copy(s, this->gptr(), n);
   count -= n;
   copied += n;
 
   for (const IOBuf* buf = gcur_->next(); buf != head_ && count > 0; buf = buf->next()) {
     n = std::min(static_cast<std::streamsize>(buf->length() / sizeof(CharT)), static_cast<off_type>(count));
-    memcpy(s + copied * sizeof(CharT), buf->data(), n * sizeof(CharT));
+    Traits::copy(s + copied, reinterpret_cast<const CharT*>(buf->data()), n);
     count -= n;
     copied += n;
 
