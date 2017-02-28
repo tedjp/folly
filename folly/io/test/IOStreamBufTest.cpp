@@ -137,12 +137,16 @@ TYPED_TEST(IOStreamBufTest, xsgetn) {
 }
 
 TYPED_TEST(IOStreamBufTest, putback) {
-  this->in_.seekg(7);
-  // putback calls pbackfail() when gptr() == eback()
+  this->in_.seekg(7); // start in the 2nd IOBuf, walk back to the 1st.
+
   this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type('w'));
   ASSERT_TRUE(this->in_.good());
-  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type(' ')); // continue into the previous IOBuf
+
+  // continue into the previous IOBuf
+  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type(' '));
   ASSERT_TRUE(this->in_.good());
-  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type('z')); // non-matching putback
+
+  // non-matching putback
+  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type('z'));
   EXPECT_FALSE(this->in_.good());
 }
