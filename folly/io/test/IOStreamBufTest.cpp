@@ -146,5 +146,3 @@ TYPED_TEST(IOStreamBufTest, putback) {
   this->in_.putback(static_cast<TypeParam>('z')); // non-matching putback
   EXPECT_FALSE(this->in_.good());
 }
-
-// vim: ts=2 sw=2 et tw=80

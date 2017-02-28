@@ -62,5 +62,3 @@ class IOStreamBuf : public std::basic_streambuf<CharT, Traits> {
 }
 
 #include "IOStreamBuf.tcc"
-
-// vim: ts=2 sw=2 et ai tw=80

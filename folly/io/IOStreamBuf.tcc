@@ -245,5 +245,3 @@ void IOStreamBuf<CharT,Traits>::csetg(const uint8_t* gbeg,
 }
 
 } // namespace
-
-// vim: ts=2 sw=2 tw=80 et ai
