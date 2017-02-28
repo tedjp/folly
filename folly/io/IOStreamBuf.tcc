@@ -48,7 +48,7 @@ typename IOStreamBuf<CharT,Traits>::int_type IOStreamBuf<CharT,Traits>::pbackfai
     return traits_type::eof();
 
   // Check whether c matches potential *gptr() before updating pointers
-  if (c != traits_type::to_int_type(prev->tail()[-1]))
+  if (!Traits::eq(c, Traits::to_int_type(prev->tail()[-1])))
     return traits_type::eof();
 
   gcur_ = prev;
