@@ -43,10 +43,6 @@ typename IOStreamBuf<CharT,Traits>::int_type IOStreamBuf<CharT,Traits>::pbackfai
     prev = prev->prev();
   } while (prev->length() == 0 && prev != head_);
 
-  // XXX: Needs modification when sizeof(CharT) > 1
-  if (UNLIKELY(prev->length() < sizeof(CharT)))
-    return traits_type::eof();
-
   // Check whether c matches potential *gptr() before updating pointers
   if (!Traits::eq(c, Traits::to_int_type(prev->tail()[-1])))
     return traits_type::eof();
@@ -81,7 +77,7 @@ typename IOStreamBuf<CharT,Traits>::pos_type IOStreamBuf<CharT,Traits>::current_
   pos_type pos = 0;
 
   for (const IOBuf* buf = head_; buf != gcur_; buf = buf->next())
-    pos += buf->length() / sizeof(CharT);
+    pos += buf->length();
 
   return pos + (this->gptr() - this->eback());
 }
@@ -102,15 +98,15 @@ IOStreamBuf<CharT,Traits>::seekoff(off_type off,
 
     size_t remaining_offset = static_cast<size_t>(off);
 
-    while (remaining_offset > buf->length() / sizeof(CharT)) {
-      remaining_offset -= buf->length() / sizeof(CharT);
+    while (remaining_offset > buf->length()) {
+      remaining_offset -= buf->length();
       buf = buf->next();
       if (buf == head_)
         return badoff;
     }
 
     gcur_ = buf;
-    csetg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(CharT), gcur_->tail());
+    csetg(gcur_->data(), gcur_->data() + remaining_offset, gcur_->tail());
 
     return pos_type(off);
   }
@@ -124,15 +120,15 @@ IOStreamBuf<CharT,Traits>::seekoff(off_type off,
     // Work with positive offset working back from the last tail()
     size_t remaining_offset = static_cast<size_t>(0 - off);
 
-    while (remaining_offset > buf->length() / sizeof(CharT)) {
-      remaining_offset -= buf->length() / sizeof(CharT);
+    while (remaining_offset > buf->length()) {
+      remaining_offset -= buf->length();
       buf = buf->prev();
-      if (buf == head_ && remaining_offset > buf->length() / sizeof(CharT))
+      if (buf == head_ && remaining_offset > buf->length())
         return badoff;
     }
 
     gcur_ = buf;
-    csetg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(CharT), gcur_->tail());
+    csetg(gcur_->data(), gcur_->tail() - remaining_offset, gcur_->tail());
 
     return current_position();
   }
@@ -149,23 +145,23 @@ IOStreamBuf<CharT,Traits>::seekoff(off_type off,
 
       if (remaining_offset < static_cast<size_t>(this->gptr() - this->eback())) {
         // In the same IOBuf
-        csetg(gcur_->data(), gcur_->data() + reinterpret_cast<size_t>(this->gptr() - this->eback() - remaining_offset * sizeof(CharT)), gcur_->tail());
+        csetg(gcur_->data(), gcur_->data() + reinterpret_cast<size_t>(this->gptr() - this->eback() - remaining_offset), gcur_->tail());
         return current_position();
       }
 
       remaining_offset -= this->gptr() - this->eback();
       buf = buf->prev();
 
-      while (remaining_offset > buf->length() / sizeof(CharT)) {
+      while (remaining_offset > buf->length()) {
         if (buf == head_)
           return badoff; // position precedes start of data
 
-        remaining_offset -= buf->length() / sizeof(CharT);
+        remaining_offset -= buf->length();
         buf = buf->prev();
       }
 
       gcur_ = buf;
-      csetg(gcur_->data(), gcur_->tail() - remaining_offset * sizeof(CharT), gcur_->tail());
+      csetg(gcur_->data(), gcur_->tail() - remaining_offset, gcur_->tail());
       return current_position();
     }
 
@@ -183,13 +179,13 @@ IOStreamBuf<CharT,Traits>::seekoff(off_type off,
     for (buf = buf->next();
          buf != head_;
          buf = buf->next()) {
-      if (remaining_offset < buf->length() / sizeof(CharT)) {
+      if (remaining_offset < buf->length()) {
         gcur_ = buf;
-        csetg(gcur_->data(), gcur_->data() + remaining_offset * sizeof(CharT), gcur_->tail());
+        csetg(gcur_->data(), gcur_->data() + remaining_offset, gcur_->tail());
         return current_position();
       }
 
-      remaining_offset -= buf->length() / sizeof(CharT);
+      remaining_offset -= buf->length();
     }
 
     return badoff;
@@ -209,7 +205,7 @@ std::streamsize IOStreamBuf<CharT,Traits>::showmanyc() {
   std::streamsize s = this->egptr() - this->gptr();
 
   for (const IOBuf* buf = gcur_->next(); buf != head_; buf = buf->next())
-    s += buf->length() / sizeof(CharT);
+    s += buf->length();
 
   return s;
 }
@@ -227,13 +223,13 @@ std::streamsize IOStreamBuf<CharT,Traits>::xsgetn(char_type* s, std::streamsize 
   copied += n;
 
   for (const IOBuf* buf = gcur_->next(); buf != head_ && count > 0; buf = buf->next()) {
-    n = std::min(static_cast<std::streamsize>(buf->length() / sizeof(CharT)), static_cast<off_type>(count));
+    n = std::min(static_cast<std::streamsize>(buf->length()), static_cast<off_type>(count));
     Traits::copy(s + copied, reinterpret_cast<const CharT*>(buf->data()), n);
     count -= n;
     copied += n;
 
     gcur_ = buf;
-    csetg(gcur_->data(), gcur_->data() + n * sizeof(CharT), gcur_->tail());
+    csetg(gcur_->data(), gcur_->data() + n, gcur_->tail());
   }
 
   return copied;
