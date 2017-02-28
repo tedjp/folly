@@ -5,8 +5,8 @@
 
 namespace folly {
 
-template<typename CharT>
-class IOStreamBuf : public std::basic_streambuf<CharT> {
+template<typename CharT, typename Traits = std::char_traits<CharT> >
+class IOStreamBuf : public std::basic_streambuf<CharT, Traits> {
   // Due to having to merge single-byte subsets of CharT across IOBuf boundaries,
   // prevent the use of IOStreamBuf on multi-byte types for now.
   static_assert(sizeof(CharT) == 1, "IOStreamBuf doesn't yet work with multi-byte types");
@@ -23,7 +23,7 @@ class IOStreamBuf : public std::basic_streambuf<CharT> {
 
   IOStreamBuf(const IOStreamBuf&) = default;
   IOStreamBuf& operator=(const IOStreamBuf&) = default;
-  void swap(IOStreamBuf<CharT>&);
+  void swap(IOStreamBuf<CharT,Traits>&);
 
   virtual ~IOStreamBuf() override = default;
 
@@ -33,7 +33,7 @@ class IOStreamBuf : public std::basic_streambuf<CharT> {
   using pos_type = typename std::basic_streambuf<CharT>::pos_type;
   using traits_type = typename std::basic_streambuf<CharT>::traits_type;
 
-  static const IOStreamBuf<CharT>::pos_type badoff;
+  static const IOStreamBuf<CharT,Traits>::pos_type badoff;
 
  protected:
   // positioning
