@@ -35,6 +35,8 @@ static std::basic_string<T> typedString(const std::string& in) {
 
 template <typename T>
 class IOStreamBufTest : public ::testing::Test {
+ public:
+  static const T newline = static_cast<T>('\n');
 };
 
 typedef ::testing::Types<char, unsigned char, uint8_t, signed char> IOStreamBufTestTypes;
@@ -42,16 +44,14 @@ typedef ::testing::Types<char, unsigned char, uint8_t, signed char> IOStreamBufT
 TYPED_TEST_CASE(IOStreamBufTest, IOStreamBufTestTypes);
 
 // Tests via an istream.
-// XXX: Split these out.
 TYPED_TEST(IOStreamBufTest, IStream) {
-  const TypeParam newline = static_cast<TypeParam>('\n');
-  std::unique_ptr<IOBuf> buf = sampledata();
+  auto bufp = sampledata();
 
-  IOStreamBuf<TypeParam> streambuf(buf.get());
+  IOStreamBuf<TypeParam> streambuf(bufp.get());
   std::basic_istream<TypeParam> in(&streambuf);
 
   std::basic_string<TypeParam> s;
-  std::getline(in, s, newline);
+  std::getline(in, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("hello world"));
   EXPECT_TRUE(in.eof());
 
@@ -64,19 +64,19 @@ TYPED_TEST(IOStreamBufTest, IStream) {
   EXPECT_EQ(c, 'l');
   ASSERT_EQ(in.tellg(), 3);
 
-  std::getline(in, s, newline);
+  std::getline(in, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("lo world"));
 
   in.seekg(-2, std::ios_base::end);
   EXPECT_FALSE(in.eof());
 
-  std::getline(in, s, newline);
+  std::getline(in, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("ld"));
 
   // Seek from start
   in.seekg( 7, std::ios_base::beg);
   TypeParam raw[] = "\xfb\xfb";
-  in.get(raw, sizeof(raw), newline);
+  in.get(raw, sizeof(raw), TestFixture::newline);
   EXPECT_EQ(raw[0], static_cast<TypeParam>('o'));
   EXPECT_EQ(raw[1], static_cast<TypeParam>('r'));
   EXPECT_FALSE(in.eof());
@@ -94,7 +94,7 @@ TYPED_TEST(IOStreamBufTest, IStream) {
   in.seekg( 2, std::ios_base::cur);
   ASSERT_EQ(in.tellg(), 4);
 
-  std::getline(in, s, newline);
+  std::getline(in, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("o world"));
 
   EXPECT_TRUE(in.eof());
