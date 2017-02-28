@@ -11,7 +11,7 @@
 using folly::IOBuf;
 using folly::IOStreamBuf;
 
-static std::unique_ptr<IOBuf> sampledata() {
+static std::unique_ptr<const IOBuf> sampledata() {
   auto hello = IOBuf::copyBuffer(std::string("hello "));
   auto world = IOBuf::copyBuffer(std::string("world"));
 
@@ -36,99 +36,115 @@ static std::basic_string<T> typedString(const std::string& in) {
 template <typename T>
 class IOStreamBufTest : public ::testing::Test {
  public:
+  IOStreamBufTest():
+    streambuf_(IOStreamBuf<T>(data.get())),
+    in_(&streambuf_)
+  {}
+
   static const T newline = static_cast<T>('\n');
+  static const std::unique_ptr<const IOBuf> data;
+
+ private:
+  IOStreamBuf<T> streambuf_;
+ protected:
+  std::basic_istream<T> in_;
 };
+
+template <typename T>
+const std::unique_ptr<const IOBuf> IOStreamBufTest<T>::data = sampledata();
 
 typedef ::testing::Types<char, unsigned char, uint8_t, signed char> IOStreamBufTestTypes;
 
 TYPED_TEST_CASE(IOStreamBufTest, IOStreamBufTestTypes);
 
-// Tests via an istream.
-TYPED_TEST(IOStreamBufTest, IStream) {
-  auto bufp = sampledata();
-
-  IOStreamBuf<TypeParam> streambuf(bufp.get());
-  std::basic_istream<TypeParam> in(&streambuf);
-
+TYPED_TEST(IOStreamBufTest, get_and_getline) {
   std::basic_string<TypeParam> s;
-  std::getline(in, s, TestFixture::newline);
+  std::getline(this->in_, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("hello world"));
-  EXPECT_TRUE(in.eof());
+  EXPECT_TRUE(this->in_.eof());
 
-  in.seekg(1);
+  this->in_.seekg(1);
 
   TypeParam c;
-  in.get(c);
+  this->in_.get(c);
   EXPECT_EQ(c, 'e');
-  in.get(c);
+  this->in_.get(c);
   EXPECT_EQ(c, 'l');
-  ASSERT_EQ(in.tellg(), 3);
+  ASSERT_EQ(this->in_.tellg(), 3);
 
-  std::getline(in, s, TestFixture::newline);
+  std::getline(this->in_, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("lo world"));
 
-  in.seekg(-2, std::ios_base::end);
-  EXPECT_FALSE(in.eof());
+  this->in_.seekg(-2, std::ios_base::end);
+  EXPECT_FALSE(this->in_.eof());
 
-  std::getline(in, s, TestFixture::newline);
+  std::getline(this->in_, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("ld"));
+}
 
-  // Seek from start
-  in.seekg( 7, std::ios_base::beg);
+TYPED_TEST(IOStreamBufTest, seek) {
+  // from start
+  this->in_.seekg( 7, std::ios_base::beg);
   TypeParam raw[] = "\xfb\xfb";
-  in.get(raw, sizeof(raw), TestFixture::newline);
+  this->in_.get(raw, sizeof(raw), TestFixture::newline);
   EXPECT_EQ(raw[0], static_cast<TypeParam>('o'));
   EXPECT_EQ(raw[1], static_cast<TypeParam>('r'));
-  EXPECT_FALSE(in.eof());
-  EXPECT_FALSE(in.fail());
+  EXPECT_FALSE(this->in_.eof());
+  EXPECT_FALSE(this->in_.fail());
 
-  // Seek from end
-  in.seekg(-2, std::ios_base::end);
-  EXPECT_EQ(in.tellg(), 9);
-  in.seekg(-9, std::ios_base::end);
-  EXPECT_EQ(in.tellg(), 2);
+  // from end
+  this->in_.seekg(-2, std::ios_base::end);
+  EXPECT_EQ(this->in_.tellg(), 9);
+  this->in_.seekg(-9, std::ios_base::end);
+  EXPECT_EQ(this->in_.tellg(), 2);
 
-  // Seek from cur
-  in.seekg( 0, std::ios_base::end);
-  in.seekg(-9, std::ios_base::cur);
-  in.seekg( 2, std::ios_base::cur);
-  ASSERT_EQ(in.tellg(), 4);
+  // from cur
+  this->in_.seekg( 0, std::ios_base::end);
+  this->in_.seekg(-9, std::ios_base::cur);
+  this->in_.seekg( 2, std::ios_base::cur);
+  ASSERT_EQ(this->in_.tellg(), 4);
 
-  std::getline(in, s, TestFixture::newline);
+  std::basic_string<TypeParam> s;
+  std::getline(this->in_, s, TestFixture::newline);
   EXPECT_EQ(s, typedString<TypeParam>("o world"));
 
-  EXPECT_TRUE(in.eof());
-  ASSERT_FALSE(in.bad());
+  EXPECT_TRUE(this->in_.eof());
+  EXPECT_FALSE(this->in_.bad());
+}
 
-  // Test xsgetn (via basic_istream::read)
-  in.seekg(0);
-  ASSERT_EQ(in.tellg(), 0);
+TYPED_TEST(IOStreamBufTest, xsgetn) {
+  // xsgetn is called by basic_istream::read
+  this->in_.seekg(0);
+  ASSERT_EQ(this->in_.tellg(), 0);
 
   TypeParam cdata[sizeof("zzhello worldzz")];
-  in.read(cdata, sizeof(cdata));
-  EXPECT_TRUE(in.eof());
-  EXPECT_TRUE(in.fail()); // short read = fail
-  EXPECT_FALSE(in.bad());
-  in.clear(); // clear failbit
-  std::basic_string<TypeParam> check(cdata, cdata + in.gcount());
+  this->in_.read(cdata, sizeof(cdata));
+  EXPECT_TRUE(this->in_.eof());
+  EXPECT_TRUE(this->in_.fail()); // short read = fail
+  EXPECT_FALSE(this->in_.bad());
+  this->in_.clear(); // clear failbit
+  std::basic_string<TypeParam> check(cdata, cdata + this->in_.gcount());
   EXPECT_EQ(check, typedString<TypeParam>("hello world"));
 
-  in.seekg(1);
-  ASSERT_EQ(in.tellg(), 1);
+  this->in_.seekg(1);
+  ASSERT_EQ(this->in_.tellg(), 1);
   std::memset(cdata, '\xfb', sizeof(cdata));
-  in.read(cdata, 6);
+  this->in_.read(cdata, 6);
 
-  EXPECT_EQ(in.gcount(), 6);
+  EXPECT_EQ(this->in_.gcount(), 6);
   check = std::basic_string<TypeParam>(cdata, cdata + 6);
   EXPECT_EQ(check, typedString<TypeParam>("ello w"));
+}
 
-  // putback
-  in.putback(static_cast<TypeParam>('w'));
-  ASSERT_TRUE(in.good());
-  in.putback(static_cast<TypeParam>(' ')); // continue into the previous IOBuf
-  ASSERT_TRUE(in.good());
-  in.putback(static_cast<TypeParam>('z')); // non-matching putback
-  EXPECT_FALSE(in.good());
+TYPED_TEST(IOStreamBufTest, putback) {
+  this->in_.seekg(7);
+  // putback calls pbackfail() when gptr() == eback()
+  this->in_.putback(static_cast<TypeParam>('w'));
+  ASSERT_TRUE(this->in_.good());
+  this->in_.putback(static_cast<TypeParam>(' ')); // continue into the previous IOBuf
+  ASSERT_TRUE(this->in_.good());
+  this->in_.putback(static_cast<TypeParam>('z')); // non-matching putback
+  EXPECT_FALSE(this->in_.good());
 }
 
 // vim: ts=2 sw=2 et tw=80
