@@ -222,14 +222,12 @@ std::streamsize IOStreamBuf<T>::xsgetn(char_type* s, std::streamsize count) {
   std::streamsize copied = 0;
 
   std::streamsize n = std::min(this->egptr() - this->gptr(), static_cast<off_type>(count));
-  // XXX: Check for overflow (write a memcpy_safe or something)
   memcpy(s, this->gptr(), n * sizeof(T));
   count -= n;
   copied += n;
 
   for (const IOBuf* buf = gcur_->next(); buf != head_ && count > 0; buf = buf->next()) {
     n = std::min(static_cast<std::streamsize>(buf->length() / sizeof(T)), static_cast<off_type>(count));
-    // XXX: Check for overflow (as above)
     memcpy(s + copied * sizeof(T), buf->data(), n * sizeof(T));
     count -= n;
     copied += n;
