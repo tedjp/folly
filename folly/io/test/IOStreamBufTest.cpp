@@ -26,17 +26,17 @@ TEST(IOStreamBuf, IStream) {
   // XXX: Type kludgery
   // IOStreamBuf type needs to match istream type, and everything
   // needs to be cast to/from IOBuf's uint8_t
-  IOStreamBuf<char> streambuf(buf.get());
-  std::istream in(&streambuf);
+  IOStreamBuf<uint8_t> streambuf(buf.get());
+  std::basic_istream<uint8_t> in(&streambuf);
 
-  std::string s;
+  std::basic_string<uint8_t> s;
   std::getline(in, s);
   EXPECT_EQ(s, "hello world");
   EXPECT_TRUE(in.eof());
 
   in.seekg(1);
 
-  char c;
+  uint8_t c;
   in.get(c);
   EXPECT_EQ(c, 'e');
   in.get(c);
@@ -54,10 +54,10 @@ TEST(IOStreamBuf, IStream) {
 
   // Seek from start
   in.seekg( 7, std::ios_base::beg);
-  char chars[] = "\xfb\xfb";
-  in.get(chars, sizeof(chars));
-  EXPECT_EQ(chars[0], 'o');
-  EXPECT_EQ(chars[1], 'r');
+  uint8_t uint8_ts[] = "\xfb\xfb";
+  in.get(uint8_ts, sizeof(uint8_ts));
+  EXPECT_EQ(uint8_ts[0], 'o');
+  EXPECT_EQ(uint8_ts[1], 'r');
   EXPECT_FALSE(in.eof());
   EXPECT_FALSE(in.fail());
 
@@ -83,7 +83,7 @@ TEST(IOStreamBuf, IStream) {
   in.seekg(0);
   ASSERT_EQ(in.tellg(), 0);
 
-  char cdata[sizeof("zzhello worldzz")];
+  uint8_t cdata[sizeof("zzhello worldzz")];
   in.read(cdata, sizeof(cdata));
   EXPECT_TRUE(in.eof());
   EXPECT_TRUE(in.fail()); // short read = fail
