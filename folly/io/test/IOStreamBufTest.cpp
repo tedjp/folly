@@ -41,7 +41,7 @@ class IOStreamBufTest : public ::testing::Test {
     in_(&streambuf_)
   {}
 
-  static const T newline = static_cast<T>('\n');
+  static const T newline = IOStreamBuf<T>::traits_type::to_char_type('\n');
   static const std::unique_ptr<const IOBuf> data;
 
  private:
@@ -87,8 +87,8 @@ TYPED_TEST(IOStreamBufTest, seek) {
   this->in_.seekg( 7, std::ios_base::beg);
   TypeParam raw[] = "\xfb\xfb";
   this->in_.get(raw, sizeof(raw), TestFixture::newline);
-  EXPECT_EQ(raw[0], static_cast<TypeParam>('o'));
-  EXPECT_EQ(raw[1], static_cast<TypeParam>('r'));
+  EXPECT_EQ(raw[0], IOStreamBuf<TypeParam>::traits_type::to_char_type('o'));
+  EXPECT_EQ(raw[1], IOStreamBuf<TypeParam>::traits_type::to_char_type('r'));
   EXPECT_FALSE(this->in_.eof());
   EXPECT_FALSE(this->in_.fail());
 
@@ -139,10 +139,10 @@ TYPED_TEST(IOStreamBufTest, xsgetn) {
 TYPED_TEST(IOStreamBufTest, putback) {
   this->in_.seekg(7);
   // putback calls pbackfail() when gptr() == eback()
-  this->in_.putback(static_cast<TypeParam>('w'));
+  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type('w'));
   ASSERT_TRUE(this->in_.good());
-  this->in_.putback(static_cast<TypeParam>(' ')); // continue into the previous IOBuf
+  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type(' ')); // continue into the previous IOBuf
   ASSERT_TRUE(this->in_.good());
-  this->in_.putback(static_cast<TypeParam>('z')); // non-matching putback
+  this->in_.putback(IOStreamBuf<TypeParam>::traits_type::to_char_type('z')); // non-matching putback
   EXPECT_FALSE(this->in_.good());
 }
