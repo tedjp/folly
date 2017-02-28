@@ -1,4 +1,3 @@
-#include <cstring>
 #include <istream>
 #include <memory>
 #include <string>
@@ -117,8 +116,8 @@ TYPED_TEST(IOStreamBufTest, xsgetn) {
   this->in_.seekg(0);
   ASSERT_EQ(this->in_.tellg(), 0);
 
-  TypeParam cdata[sizeof("zzhello worldzz")];
-  this->in_.read(cdata, sizeof(cdata));
+  TypeParam cdata[sizeof("zzhello worldzz") * sizeof(TypeParam)];
+  this->in_.read(cdata, sizeof(cdata) / sizeof(TypeParam));
   EXPECT_TRUE(this->in_.eof());
   EXPECT_TRUE(this->in_.fail()); // short read = fail
   EXPECT_FALSE(this->in_.bad());
@@ -128,7 +127,8 @@ TYPED_TEST(IOStreamBufTest, xsgetn) {
 
   this->in_.seekg(1);
   ASSERT_EQ(this->in_.tellg(), 1);
-  std::memset(cdata, '\xfb', sizeof(cdata));
+  // memset
+  IOStreamBuf<TypeParam>::traits_type::assign(cdata, sizeof(cdata) / sizeof(TypeParam), '\xfb');
   this->in_.read(cdata, 6);
 
   EXPECT_EQ(this->in_.gcount(), 6);
