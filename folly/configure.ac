@@ -160,7 +160,7 @@ AM_PATH_PYTHON
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h features.h inttypes.h limits.h sched.h stdint.h stdlib.h string.h sys/time.h unistd.h mutex.h malloc.h byteswap.h bits/functexcept.h bits/c++config.h])
+AC_CHECK_HEADERS([features.h malloc.h bits/functexcept.h bits/c++config.h])
 
 AC_CHECK_HEADER(double-conversion/double-conversion.h, [], [AC_MSG_ERROR(
                 [Couldn't find double-conversion.h, please download from \
@@ -182,7 +182,6 @@ AC_ARG_WITH([jemalloc], [
 ])
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_HEADER_STDBOOL
 AC_C_CONST
 AC_C_INLINE
 AC_TYPE_SIZE_T
@@ -210,7 +209,7 @@ static_assert(
   fi
 fi
 
-AC_CHECK_TYPES([ptrdiff_t, pthread_spinlock_t])
+AC_CHECK_TYPES([pthread_spinlock_t])
 
 AC_CACHE_CHECK(
   [for ifunc support],
@@ -251,22 +250,6 @@ AC_DEFINE_UNQUOTED(
 AC_DEFINE_UNQUOTED(
   [OVERRIDE], [$override_val],
   [Define to "override" if the compiler supports C++11 "override"])
-
-AC_CACHE_CHECK(
-  [for std::this_thread::sleep_for],
-  [folly_cv_func_this_thread_sleep_for],
-  [AC_COMPILE_IFELSE(
-    [AC_LANG_SOURCE[
-      #include <thread>
-      #include <chrono>
-      void func() { std::this_thread::sleep_for(std::chrono::seconds(1)); }]],
-    [folly_cv_func_this_thread_sleep_for=yes],
-    [folly_cv_func_this_thread_sleep_for=no])])
-
-if test "$folly_cv_func_this_thread_sleep_for" = yes; then
-    AC_DEFINE([HAVE_STD__THIS_THREAD__SLEEP_FOR], [1],
-              [Define to 1 if std::this_thread::sleep_for() is defined.])
-fi
 
 AC_CACHE_CHECK(
   [for constexpr strlen],
@@ -558,13 +541,7 @@ AC_DEFINE_UNQUOTED(
    otherwise define to 0])
 
 # Checks for library functions.
-AC_CHECK_FUNCS([getdelim \
-                gettimeofday \
-                memmove \
-                memset \
-                pow \
-                strerror \
-                malloc_size \
+AC_CHECK_FUNCS([malloc_size \
                 malloc_usable_size \
                 memrchr \
                 pipe2 \

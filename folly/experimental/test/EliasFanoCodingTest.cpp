@@ -46,7 +46,7 @@ uint8_t slowDefaultNumLowerBits(size_t upperBound, size_t size) {
 TEST(EliasFanoCoding, defaultNumLowerBits) {
   // Verify that slowDefaultNumLowerBits and optimized
   // Encoder::defaultNumLowerBits agree.
-  constexpr size_t kNumIterations = 2500;
+  static constexpr size_t kNumIterations = 2500;
   auto compare = [](size_t upperBound, size_t size) {
     using Encoder = EliasFanoEncoderV2<size_t>;
     EXPECT_EQ(int(slowDefaultNumLowerBits(upperBound, size)),
@@ -135,6 +135,28 @@ TEST_F(EliasFanoCodingTest, Select64) {
       CHECK_EQ((x >> pos) & 1, 1);
       CHECK_EQ(instr::popcount(x & ((uint64_t(1) << pos) - 1)), k);
     }
+  }
+}
+
+TEST_F(EliasFanoCodingTest, BugLargeGapInUpperBits) { // t16274876
+  typedef EliasFanoEncoderV2<uint32_t, uint32_t, 2, 2> Encoder;
+  typedef EliasFanoReader<Encoder, instructions::EF_TEST_ARCH> Reader;
+  constexpr uint32_t kLargeValue = 127;
+
+  // Build a list where the upper bits have a large gap after the
+  // first element, so that we need to reposition in the upper bits
+  // using skips to position the iterator on the second element.
+  std::vector<uint32_t> data = {0, kLargeValue};
+  for (uint32_t i = 0; i < kLargeValue; ++i) {
+    data.push_back(data.back() + 1);
+  }
+  auto list = Encoder::encode(data.begin(), data.end());
+
+  {
+    Reader reader(list);
+    ASSERT_TRUE(reader.skipTo(kLargeValue - 1));
+    ASSERT_EQ(kLargeValue, reader.value());
+    ASSERT_EQ(0, reader.previousValue());
   }
 }
 
